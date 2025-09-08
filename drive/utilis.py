@@ -1,20 +1,39 @@
-from dbm import error
 import google.auth
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
-import os.path
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+import dotenv
+import os
 
+dotenv.load_dotenv()
+
+mime_types = os.getenv("MIME_TYPES")
 
 creds, _ = google.auth.default()
 
 service = build("drive", "v3", credentials=creds)
 
-def upload_to_drive(file_path, mime_type, folder_id=None):
-    pass
+def upload_to_drive(file_path, file_name, folder_id='root'):
+    try:
+
+        file_metadata = {"name": file_name, "parents": [folder_id]}
+        file_extension = file_name.split(".")[-1]
+
+        media = MediaFileUpload(
+            file_path, mimetype=mime_types[file_extension], resumable=True
+        )
+        # pylint: disable=maybe-no-member
+        file = (
+            service.files()
+            .create(body=file_metadata, media_body=media, fields="id")
+            .execute()
+        )
+        print(f'File ID: "{file.get("id")}".')
+        return file.get("id")
+
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+        return None
 
 def get_drive_contents(name=None, folder_id='root'):
     try:
@@ -24,7 +43,7 @@ def get_drive_contents(name=None, folder_id='root'):
         if folder_id:
             query += f" and '{folder_id}' in parents"
 
-        results = service.files().list(q=query, spaces="drive", fields="nextPageToken, files(id, name, mimeType)").execute()
+        results = service.files().list(q=query, spaces="drive", fields="files(id, name, mimeType)").execute()
         return results.get("files", [])
 
     except HttpError as error:
