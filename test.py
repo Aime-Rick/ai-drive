@@ -54,7 +54,7 @@ def main(name=None, folder_id='root'):
         if folder_id:
             query += f" and '{folder_id}' in parents"
 
-        results = service.files().list(q=query, pageSize=20, spaces="drive", fields="nextPageToken, files(id, name, mimeType)").execute()
+        results = service.files().list(q=query, pageSize=20, spaces="drive", fields="files(id, name, mimeType)").execute()
         pprint(results, indent=2)
 
   except HttpError as error:
