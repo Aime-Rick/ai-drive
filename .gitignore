@@ -1,6 +1,7 @@
 creds.json
 download.png
 token.json
+rag/credentials/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
