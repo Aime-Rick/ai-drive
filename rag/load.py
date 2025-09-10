@@ -4,7 +4,7 @@ from langchain_google_community import GoogleDriveLoader
 from langchain_text_splitters import CharacterTextSplitter
 from langchain.document_loaders import Docx2txtLoader, TextLoader
 from dotenv import load_dotenv
-from utils import download_file
+from rag.drive_utils import download_file
 import base64
 load_dotenv()
 import mimetypes
