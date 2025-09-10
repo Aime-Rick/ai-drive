@@ -11,7 +11,8 @@ from pprint import pprint
 SCOPES = ["https://www.googleapis.com/auth/drive.file",
           "https://www.googleapis.com/auth/drive.install",
           "https://www.googleapis.com/auth/drive.appdata",
-          "https://www.googleapis.com/auth/drive.metadata"]
+          "https://www.googleapis.com/auth/drive.metadata",
+          "https://www.googleapis.com/auth/drive"]
 
 def main(name=None, folder_id='root'):
   """Shows basic usage of the Drive v3 API.
@@ -29,7 +30,7 @@ def main(name=None, folder_id='root'):
       creds.refresh(Request())
     else:
       flow = InstalledAppFlow.from_client_secrets_file(
-          "creds.json", SCOPES
+          "/home/ricko/ai-drive/rag/credentials/credentials.json", SCOPES
       )
       creds = flow.run_local_server()
     # Save the credentials for the next run
