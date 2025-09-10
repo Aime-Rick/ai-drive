@@ -9,7 +9,10 @@ class StandardResponse(BaseModel):
     message: str | None = None
 
 # --- Drive and RAG Request Models ---
-
+class UserRequest(BaseModel):
+    email: str
+    password: str
+    
 class UploadFileRequest(BaseModel):
     folder_id: str = "root"
 

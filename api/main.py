@@ -271,8 +271,7 @@ async def query_documents(request: QueryRequest):
             "status": "success", 
             "data": {
                 "query": request.query,
-                "answer": answer,
-                "top_k": request.top_k
+                "answer": answer
             }
         }
         
