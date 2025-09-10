@@ -1,3 +1,6 @@
+fastapi
+uvicorn[standard]
+python-multipart
 supabase
 google-api-python-client 
 google-auth-httplib2 
@@ -10,3 +13,8 @@ docx2txt
 pydub
 noisereduce
 soundfile
+librosa
+moviepy
+speechrecognition
+python-dotenv
+jina-embeddings-v2

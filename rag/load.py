@@ -2,7 +2,7 @@ import os
 from supabase.client import Client, create_client
 from langchain_google_community import GoogleDriveLoader
 from langchain_text_splitters import CharacterTextSplitter
-from langchain.document_loaders import Docx2txtLoader, TextLoader
+from langchain_community.document_loaders import Docx2txtLoader, TextLoader
 from dotenv import load_dotenv
 from rag.drive_utils import download_file
 import base64
@@ -168,9 +168,17 @@ def load_videos(file_id, extension=".mp4"):
         with tempfile.NamedTemporaryFile(suffix=".wav") as audio_file:
             audio.write_audiofile(audio_file.name)
             audio_file.flush()
-            with open(audio_file.name, "rb") as af:
-                audio_bytes = af.read()
-                load_audio(audio_bytes)
+            # Process audio bytes directly
+            recognizer = sr.Recognizer()
+            with sr.AudioFile(audio_file.name) as source:
+                audio_data = recognizer.record(source)
+                try:
+                    text = recognizer.recognize_google(audio_data)
+                    chunks = chunk_text(text)
+                    for chunk in chunks:
+                        supabase.table("documents").insert({"content": chunk}).execute()
+                except (sr.UnknownValueError, sr.RequestError) as e:
+                    print(f"Audio processing error: {e}")
 
         print("Extratings frames...")
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -184,7 +192,9 @@ def load_videos(file_id, extension=".mp4"):
                 frame_path = os.path.join(tmpdir, frame_file)
                 with open(frame_path, "rb") as ff:
                     frame_bytes = ff.read()
-                    load_image(frame_bytes)
+                    base64_str = base64.b64encode(frame_bytes).decode("utf-8")
+                    data_uri = f"data:image/png;base64,{base64_str}"
+                    supabase.table("documents").insert({"content": data_uri}).execute()
 
 def populate_vector_db(files=None):
     load_documents()
@@ -217,4 +227,5 @@ def load_any_file(file_id, ext, populate_db=False):
 
 
 
-load_document(file_id="1fh3O1lbu_k9SSHu2WJQHMz2-bGUJsrb4")
+# Example usage - commented out for production
+# load_document(file_id="1fh3O1lbu_k9SSHu2WJQHMz2-bGUJsrb4")

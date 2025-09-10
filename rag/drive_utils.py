@@ -43,26 +43,40 @@ mime_types = {
     ".aac": "application/vnd.google-apps.audio",    
 }
 
-creds_dict = get_user_credentials()
-
-creds = Credentials(
-        token=creds_dict["access_token"],
-        refresh_token=creds_dict["refresh_token"],
-        token_uri=creds_dict["token_uri"],
-        client_id=creds_dict["client_id"],
-        client_secret=creds_dict["client_secret"],
-        scopes=creds_dict["scopes"]
-    )
-
-service = build("drive", "v3", credentials=creds)
+def get_drive_service():
+    """Get Google Drive service with user credentials."""
+    try:
+        creds_data = get_user_credentials()
+        if not creds_data:
+            raise Exception("No credentials found. Please authenticate first.")
+        
+        creds_dict = creds_data[0] if creds_data else {}
+        
+        creds = Credentials(
+            token=creds_dict.get("token"),
+            refresh_token=creds_dict.get("refresh_token"),
+            token_uri=creds_dict.get("token_uri"),
+            client_id=creds_dict.get("client_id"),
+            client_secret=creds_dict.get("client_secret"),
+            scopes=creds_dict.get("scopes", [])
+        )
+        
+        return build("drive", "v3", credentials=creds)
+    except Exception as e:
+        print(f"Error getting Drive service: {e}")
+        return None
 
 def upload_to_drive(file_path, file_name, folder_id='root'):
     try:
+        service = get_drive_service()
+        if not service:
+            return None
+            
         file_metadata = {"name": file_name, "parents": [folder_id]}
-        file_extension = file_name.split(".")[-1]
+        file_extension = "." + file_name.split(".")[-1] if "." in file_name else ".txt"
 
         media = MediaFileUpload(
-            file_path, mimetype=mime_types[file_extension], resumable=True
+            file_path, mimetype=mime_types.get(file_extension, "application/octet-stream"), resumable=True
         )
         # pylint: disable=maybe-no-member
         file = (
@@ -79,6 +93,10 @@ def upload_to_drive(file_path, file_name, folder_id='root'):
 
 def get_drive_contents(name=None, folder_id='root'):
     try:
+        service = get_drive_service()
+        if not service:
+            return []
+            
         query = "trashed = false"
         if name:
             query += f" and name contains '{name}'"
@@ -90,9 +108,14 @@ def get_drive_contents(name=None, folder_id='root'):
 
     except HttpError as error:
         print(f"An error occurred: {error}")
+        return []
 
 def create_drive_folder(folder_name, parent_folder_id=None):
   try:
+    service = get_drive_service()
+    if not service:
+        return None
+        
     if parent_folder_id:
         file_metadata = {
             "name": folder_name,
@@ -148,6 +171,10 @@ def download_file(real_file_id):
   #   with open("/home/ricko/ai-drive/rag/credentials/token.json", "w") as token:
   #     token.write(creds.to_json())
   try:
+    service = get_drive_service()
+    if not service:
+        return None
+        
     file_id = real_file_id
 
     # pylint: disable=maybe-no-member
@@ -163,5 +190,5 @@ def download_file(real_file_id):
     print(f"An error occurred: {error}")
     file = None
 
-  return file.getvalue()
+  return file.getvalue() if file else None
 

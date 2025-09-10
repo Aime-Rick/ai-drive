@@ -61,3 +61,22 @@ class DownloadReportRequest(BaseModel):
     local_file_path: str
     remote_file_path: str
 
+# --- Drive and RAG Request Models ---
+
+class UploadFileRequest(BaseModel):
+    folder_id: str = "root"
+
+class CreateFolderRequest(BaseModel):
+    folder_name: str
+    parent_folder_id: str = None
+
+class DownloadFileRequest(BaseModel):
+    file_id: str
+
+class PopulateVectorDBRequest(BaseModel):
+    file_ids: List[str] = None
+
+class QueryRequest(BaseModel):
+    query: str
+    top_k: int = 5
+
