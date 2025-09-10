@@ -2,6 +2,7 @@ import os
 from supabase.client import Client, create_client
 from langchain_google_community import GoogleDriveLoader
 from langchain_text_splitters import CharacterTextSplitter
+from langchain.document_loaders import Docx2txtLoader, TextLoader
 from dotenv import load_dotenv
 from utils import download_file
 import base64
@@ -13,6 +14,9 @@ from pydub import AudioSegment
 import noisereduce as nr
 import librosa
 import soundfile as sf
+import tempfile
+from moviepy.video.io import VideoFileClip
+
 
 supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY")
@@ -51,16 +55,44 @@ def load_documents():
         )
     print(f"Loaded {len(docs)} documents from Google Drive")
 
-def load_document():
-    pass
+def load_document(file_id, ext=None):
+    if ext==".docx":
+        doc_byte = download_file(file_id)
+        with tempfile.NamedTemporaryFile(suffix=ext) as temp_file:
+            temp_file.write(doc_byte)
+            temp_file.flush()
+            loader = Docx2txtLoader(temp_file.name) 
+    
+    elif ext==".txt":
+        doc_byte = download_file(file_id)
+        with tempfile.NamedTemporaryFile(suffix=ext) as temp_file:
+            temp_file.write(doc_byte)
+            temp_file.flush()
+            loader = TextLoader(temp_file.name, encoding="utf-8")
+    else:
+        loader = GoogleDriveLoader(
+            credentials_path="/home/ricko/ai-drive/rag/credentials/credentials.json",
+            token_path="/home/ricko/ai-drive/rag/credentials/token.json",
+            file_ids=[file_id],
+            scopes=["https://www.googleapis.com/auth/drive.file"]
+        )
+    documents = loader.load()
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    docs = text_splitter.split_documents(documents)
+    for doc in docs:
+        response = (
+            supabase.table("documents")
+            .insert({"content": doc.page_content})
+            .execute()
+        )
+    print(f"Loaded {len(docs)} documents from Google Drive")
     
 
-def load_image(file_id):
+def load_image(file_id, extension=".png"):
     file = download_file(file_id)
     base64_str = base64.b64encode(file).decode("utf-8")
-    mime_type = mimetypes.guess_type("myimage.png")[0] or "application/octet-stream"
-
-    data_uri = f"data:{mime_type};base64,{base64_str}"
+    
+    data_uri = f"data:image/{extension.split('.')[-1]};base64,{base64_str}"
     response = (
             supabase.table("documents")
             .insert({"content": data_uri})
@@ -88,9 +120,10 @@ def denoise_wav_bytes(wav_bytes: bytes) -> bytes:
     sf.write(out_buffer, y_clean, sr, format="WAV", subtype="PCM_16")
     return out_buffer.getvalue()
 
-def load_audio(file_id, denoise=True):
-    file = download_file(file_id)                 # raw audio bytes (any format)
-    file = audio_bytes_to_wav_bytes(file)         # convert to wav
+def load_audio(file_id, ext, denoise=True):
+    file = download_file(file_id)
+    if ext != ".wav":
+        file = audio_bytes_to_wav_bytes(file)                 # raw audio bytes (any format)
     if denoise:
         file = denoise_wav_bytes(file)            # optional noise reduction
     
@@ -118,25 +151,70 @@ def load_audio(file_id, denoise=True):
     print(f"Loaded {len(chunks)} text chunks from audio file to database")
 
 
-def load_videos():
-    pass
-# response = (
-#     supabase.table("planets")
-#     .insert({"id": 1, "name": "Pluto"})
-#     .execute()
-# )
+def load_videos(file_id, extension=".mp4"):
+    video_bytes = download_file(file_id)
+    with tempfile.NamedTemporaryFile(suffix=extension) as temp_file:
+    # Write bytes to the temp file
+        temp_file.write(video_bytes)
+        temp_file.flush()  # ensure all data is written
+
+        # Load into MoviePy
+        clip = VideoFileClip(temp_file.name)
+        print("Duration (s):", clip.duration)
+        
+        # Example: extract audio
+        print("Extracting audio...")
+        audio = clip.audio
+        with tempfile.NamedTemporaryFile(suffix=".wav") as audio_file:
+            audio.write_audiofile(audio_file.name)
+            audio_file.flush()
+            with open(audio_file.name, "rb") as af:
+                audio_bytes = af.read()
+                load_audio(audio_bytes)
+
+        print("Extratings frames...")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Write frames to temp directory
+            clip.write_images_sequence(
+                os.path.join(tmpdir, "frame%04d.png"),
+                fps=0.2  # adjust frame extraction rate
+            )
+            # Process each frame
+            for frame_file in sorted(os.listdir(tmpdir)):
+                frame_path = os.path.join(tmpdir, frame_file)
+                with open(frame_path, "rb") as ff:
+                    frame_bytes = ff.read()
+                    load_image(frame_bytes)
+
+def populate_vector_db(files=None):
+    load_documents()
+
+    for file in files or []:
+        file_id = file["id"]
+        ext = "." + file["name"].split(".")[-1]
+        load_any_file(file_id, ext, populate_db=True)
 
 
 
-# loader = TextLoader("../../how_to/state_of_the_union.txt")
-# documents = loader.load()
-# text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-# docs = text_splitter.split_documents(documents)
+def load_any_file(file_id, ext, populate_db=False):
 
-# loader = GoogleDriveLoader(
-#     folder_id="1yucgL9WGgWZdM1TOuKkeghlPizuzMYb5",
-#     file_types=["document", "sheet"],
-#     recursive=False,
-# )
+    if ext in [".png", ".jpg", ".jpeg", ".svg"]:
+        load_image(file_id, extension=ext)
+    elif ext in [".mp4", ".mov", ".avi", ".mkv"]:
+        load_videos(file_id, extension=ext)
+    elif ext in [".mp3", ".wav", ".flac", ".aac"]:
+        load_audio(file_id, ext=ext, denoise=True)
+    elif ext in [".txt", ".pdf", ".docx"]:
+        if populate_db:
+            if ext in [".txt", ".docx"]:
+                load_document(file_id, ext=ext)
+        else:
+            load_document(file_id, ext=ext)
+    else:
+        print(f"Unsupported file extension: {ext}")
+    
 
-load_audio("124AYmqtlXt2P5gs85LbmbAaDwBUXcOAO")
+
+
+
+load_document(file_id="1fh3O1lbu_k9SSHu2WJQHMz2-bGUJsrb4")
